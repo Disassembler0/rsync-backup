@@ -1,0 +1,98 @@
+#!/usr/bin/python3
+
+import configparser, io, os, shlex, sys, time
+from argparse import ArgumentParser
+from shutil import rmtree
+from subprocess import Popen, PIPE
+
+def main(args):
+    if not os.path.exists(args.config):
+        sys.exit('Config file does not exist')
+
+    defaults = '''[backup]
+type =
+source-dir = /
+destination-dir =
+include-from =
+pre-script =
+post-script =
+retention = 180
+'''
+    config = configparser.RawConfigParser()
+    config.readfp(io.StringIO(defaults))
+    try:
+        config.read(args.config)
+    except:
+        pass
+
+    type = config.get('backup', 'type')
+    if type not in ['incremental', 'full']:
+        sys.exit('Unknown backup type specified')
+
+    sdir = os.path.join(config.get('backup', 'source-dir'), '')
+    ddir = os.path.join(config.get('backup', 'destination-dir'), '')
+
+    pre_script = config.get('backup', 'pre-script')
+    if pre_script != '':
+        p = Popen(shlex.split(pre_script), stdout=PIPE)
+        if args.progress:
+            print('Running pre-script: {}'.format(pre_script))
+            for line in iter(p.stdout.readline, b''):
+                print(line.decode(), end='')
+            print()
+        p.communicate()
+
+    rsync = ['rsync', '-a', '--delete']
+    if args.progress:
+        rsync.append('--progress')
+
+    include_from = config.get('backup', 'include-from')
+    if include_from != '':
+        rsync.append('--include-from={}'.format(include_from))
+    if type == 'incremental':
+        rsync.append('--link-dest={}'.format(os.path.join(ddir, 'current/')))
+    rsync.append(sdir)
+    if type == 'incremental':
+        lastdir = os.path.join(ddir, 'backup_{}/'.format(time.strftime('%Y-%m-%d_%H-%M')))
+        rsync.append(lastdir)
+    else:
+        rsync.append(os.path.join(ddir, ''))
+    p = Popen(rsync, stdout=PIPE, stderr=PIPE)
+
+    if args.progress:
+        for line in iter(p.stdout.readline, b''):
+            print(line.decode(), end='')
+        print()
+    rsout, rserr = p.communicate();
+    if p.returncode not in [0, 23, 24]:
+        if type == 'incremental' and os.path.exists(lastdir):
+            rmtree(lastdir)
+        sys.exit(p.returncode)
+
+    post_script = config.get('backup', 'post-script')
+    if post_script != '':
+        p = Popen(shlex.split(post_script), stdout=PIPE)
+        if args.progress:
+            print('Running post-script: {}'.format(post_script))
+            for line in iter(p.stdout.readline, b''):
+                print(line.decode(), end='')
+            print()
+        p.communicate()
+
+    if type == 'incremental':
+        symlink = os.path.join(ddir, 'current')
+        if os.path.exists(symlink):
+            os.remove(symlink)
+        os.symlink(lastdir, symlink)
+        backups = [a for a in os.listdir(ddir) if a.startswith('backup')]
+        for olddir in sorted(backups)[:-int(config.get('backup', 'retention'))]:
+            if args.progress:
+                print('Removing old backup: {}'.format(olddir))
+            rmtree(os.path.join(ddir, olddir))
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser(description='Disassembler\'s Backup Tool')
+    parser.add_argument('-c', '--config', required=True, help='specifies which config file will be used')
+    parser.add_argument('-p', '--progress', action='store_true', help='shows progress during transfer')
+    main(parser.parse_args())
