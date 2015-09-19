@@ -11,6 +11,7 @@ def main(args):
 
     defaults = '''[backup]
 type =
+remote-shell =
 source-dir = /
 destination-dir =
 include-from =
@@ -46,6 +47,9 @@ retention = 180
     if args.progress:
         rsync.append('--progress')
 
+    remote_shell = config.get('backup', 'remote-shell')
+    if remote_shell != '':
+        rsync.extend(['-e', remote_shell])
     include_from = config.get('backup', 'include-from')
     if include_from != '':
         rsync.append('--include-from={}'.format(include_from))
