@@ -34,6 +34,9 @@
 
 + etc/minidlna.conf
 
++ etc/netplan
++ etc/netplan/**
+
 + etc/nullmailer
 + etc/nullmailer/**
 
@@ -100,5 +103,9 @@
 
 + var
 + var/lib
+
++ var/lib/samba
++ var/lib/samba/**
+
 + var/lib/redis
 + var/lib/redis/**
