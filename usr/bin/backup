@@ -13,7 +13,7 @@ def main(args):
     config = ConfigParser()
     config.read(args.config)
 
-    type = config.get('backup', 'type' fallback=None)
+    type = config.get('backup', 'type', fallback=None)
     if type not in ('incremental', 'full'):
         sys.exit('Unknown backup type specified')
 
