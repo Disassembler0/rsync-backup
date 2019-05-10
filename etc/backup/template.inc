@@ -17,6 +17,9 @@
 
 + etc/dbbackup.conf
 
++ etc/default
++ etc/default/**
+
 + etc/dovecot
 + etc/dovecot/**
 
@@ -26,13 +29,25 @@
 + etc/firewall
 + etc/firewall/**
 
++ etc/fstab
+
++ etc/hostname
++ etc/hosts
+
 + etc/libvirt
 + etc/libvirt/**
 
 + etc/logrotate.d
 + etc/logrotate.d/**
 
++ etc/mailadmin.conf
+
++ etc/mailname
+
 + etc/minidlna.conf
+
++ etc/mysql
++ etc/mysql/**
 
 + etc/netplan
 + etc/netplan/**
@@ -57,6 +72,8 @@
 
 + etc/report.conf
 
++ etc/resolv.conf
+
 + etc/rspamd
 + etc/rspamd/**
 
@@ -67,11 +84,20 @@
 + etc/samba
 + etc/samba/**
 
++ etc/sysctl.d
++ etc/sysctl.d/**
+
++ etc/systemd/
++ etc/systemd/**
+
 + etc/zabbix
 + etc/zabbix/**
 
 + opt
 + opt/**
+
++ root
++ root/**
 
 + srv
 
@@ -104,8 +130,19 @@
 + var
 + var/lib
 
-+ var/lib/samba
-+ var/lib/samba/**
++ var/lib/lxc
++ var/lib/lxc/**
+
++ var/lib/lxd
++ var/lib/lxd/**
 
 + var/lib/redis
 + var/lib/redis/**
+
++ var/lib/rspamd
++ var/lib/rspamd/**
+
++ var/lib/samba/
++ var/lib/samba/**
+
+- *
