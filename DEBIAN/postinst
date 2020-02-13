@@ -1,0 +1,6 @@
+#!/bin/sh
+
+if [ "${1}" = "configure" ] && dpkg --compare-versions "${2}" lt "2.0.0"; then
+    sed -i '/\[backup\]/d' /etc/backup/*.conf
+    sed -i 's/ -c / /g' /etc/cron.d/backup
+fi

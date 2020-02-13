@@ -1,95 +1,160 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 
-import configparser, io, os, shlex, sys, time
-from argparse import ArgumentParser
-from configparser import ConfigParser
-from shutil import rmtree
-from subprocess import Popen, PIPE
+import argparse
+import configparser
+import io
+import os
+import shlex
+import sys
+import time
+import shutil
+import subprocess
+
+TYPE_CUMULATIVE = 'cumulative'
+TYPE_FULL = 'full'
+TYPE_INCREMENTAL = 'incremental'
+
+def passthru(cmd):
+    # Run command and immediately print output as it is generated
+    shell = isinstance(cmd, str)
+    p = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # Read and print stdout line by line
+    for line in iter(p.stdout.readline, b''):
+        print(line.decode(), end='')
+    # Return the return code of the finished process
+    return p.wait()
+
+def backup(conf_path, show_progress):
+    # Read the config. Raises FileNotFoundError if the config file doesn't exist
+    config = configparser.ConfigParser()
+    with open(conf_path) as f:
+        config_data = f'[backup]\n{f.read()}'
+    config.read_string(config_data)
+    config = config['backup']
+
+    # Sanity-check backup type
+    type = config.get('type', None)
+    if type not in (TYPE_CUMULATIVE, TYPE_FULL, TYPE_INCREMENTAL):
+        raise ValueError(type)
+
+    # Run pre-script
+    pre_script = config.get('pre-script', None)
+    if pre_script:
+        print(f'Running pre-script: {pre_script}')
+        pre_script_rc = passthru(pre_script)
+        # raise CalledProcessError if pre-script didn't finish with returncode 0
+        if pre_script_rc:
+            raise subprocess.CalledProcessError(pre_script_rc, pre_script)
+        print()
+
+    # Get source and destination directories including trailing slash if not given
+    src_dir = os.path.join(config.get('source-dir', None), '')
+    dst_dir = os.path.join(config.get('destination-dir', None), '')
+
+    # Compile rsync command
+    rsync_cmd = ['rsync', '-a', '--numeric-ids']
+    # Show progress if requested in command line args
+    if show_progress:
+        rsync_cmd.append('--progress')
+    # Delete files not existing in source for full and incremental backups
+    if type != TYPE_CUMULATIVE:
+        rsync_cmd.append('--delete')
+    # Allow partial transfers if configured
+    partial = config.getboolean('partial', False)
+    if partial:
+        rsync_cmd.append('--partial')
+    # Allow compression if configured
+    compress = config.getboolean('compress', False)
+    if compress:
+        rsync_cmd.append('-z')
+    # Use remote shell if configured
+    remote_shell = config.get('remote-shell', None)
+    if remote_shell:
+        rsync_cmd.extend(('-e', remote_shell))
+    # Load list if files to include in the backup if configured
+    include_from = config.get('include-from', None)
+    if include_from:
+        rsync_cmd.append(f'--include-from={include_from}')
+    # Set directory for hardlink sources for incremental backups
+    if type == TYPE_INCREMENTAL:
+        current_symlink = os.path.join(dst_dir, 'current')
+        rsync_cmd.append(f'--link-dest={current_symlink}/')
+    # Append source directory
+    rsync_cmd.append(src_dir)
+    # Append destination directory
+    if type == TYPE_INCREMENTAL:
+        # Create a timestamped subdirectory for incremental backup
+        current_time = time.strftime('%Y-%m-%d_%H-%M')
+        inc_dst_dir = os.path.join(dst_dir, f'backup_{current_time}/')
+        rsync_cmd.append(inc_dst_dir)
+    else:
+        rsync_cmd.append(os.path.join(dst_dir, ''))
+
+    # Make the rsync command readable for print (same as shlex.join() in python 3.8)
+    rsync_readable = ' '.join(shlex.quote(token) for token in rsync_cmd)
+    print(f'Running backup: {rsync_readable}')
+    # Run rsync
+    rsync_rc = passthru(rsync_cmd)
+    # Remove incremental destination dir and raise CalledProcessError
+    # if rsync didn't finish with allowed return codes
+    #    0 = Success
+    #   23 = Partial transfer due to error
+    #   24 = Partial transfer due to vanished source files
+    if rsync_rc not in (0, 23, 24):
+        if type == TYPE_INCREMENTAL and os.path.exists(inc_dst_dir):
+            try:
+                shutil.rmtree(inc_dst_dir)
+            except FileNotFoundError:
+                pass
+        raise subprocess.CalledProcessError(rsync_rc, rsync_readable)
+    print()
+
+    # Run post-script
+    post_script = config.get('post-script', None)
+    if post_script:
+        print(f'Running post-script: {post_script}')
+        post_script_rc = passthru(post_script)
+        # Raise CalledProcessError if post-script didn't finish with returncode 0
+        if post_script_rc:
+            raise subprocess.CalledProcessError(post_script_rc, post_script)
+        print()
+
+    # Create "current" symlink to the newest incremental destination dir
+    # and remove the oldest backup(s) if the number of backups exceeded threshold
+    if type == TYPE_INCREMENTAL:
+        # Remove and recreate the symlink
+        try:
+            os.remove(current_symlink)
+        except FileNotFoundError:
+            pass
+        os.symlink(inc_dst_dir, current_symlink)
+        # Remove the oldest backup(s) if the number of backups exceeded retention threshold
+        backups = sorted([a for a in os.listdir(dst_dir) if a.startswith('backup')])
+        for oldest_inc_dst_dir in backups[:-config.getint('retention', 180)]:
+            print(f'Removing old backup: {oldest_inc_dst_dir}')
+            shutil.rmtree(os.path.join(dst_dir, oldest_inc_dst_dir))
 
 def main(args):
-    if not os.path.exists(args.config):
-        sys.exit('Config file does not exist')
-
-    config = ConfigParser()
-    config.read(args.config)
-
-    type = config.get('backup', 'type', fallback=None)
-    if type not in ('incremental', 'full'):
-        sys.exit('Unknown backup type specified')
-
-    source_dir = os.path.join(config.get('backup', 'source-dir', fallback='/'), '')
-    destination_dir = os.path.join(config.get('backup', 'destination-dir', fallback='/'), '')
-
-    pre_script = config.get('backup', 'pre-script', fallback=None)
-    if pre_script:
-        p = Popen(shlex.split(pre_script), stdout=PIPE)
-        if args.progress:
-            print('Running pre-script: {}'.format(pre_script))
-            for line in iter(p.stdout.readline, b''):
-                print(line.decode(), end='')
-            print()
-        p.communicate()
-
-    rsync = ['rsync', '-a', '--numeric-ids', '--delete']
+    # Print output directly if requested
     if args.progress:
-        rsync.append('--progress')
-
-    partial = config.getboolean('backup', 'partial', fallback=False)
-    if partial:
-        rsync.append('--partial')
-    compress = config.getboolean('backup', 'compress', fallback=False)
-    if compress:
-        rsync.append('-z')
-    remote_shell = config.get('backup', 'remote-shell', fallback=None)
-    if remote_shell:
-        rsync.extend(('-e', remote_shell))
-    include_from = config.get('backup', 'include-from', fallback=None)
-    if include_from:
-        rsync.append('--include-from={}'.format(include_from))
-    if type == 'incremental':
-        rsync.append('--link-dest={}'.format(os.path.join(destination_dir, 'current/')))
-    rsync.append(source_dir)
-    if type == 'incremental':
-        lastdir = os.path.join(destination_dir, 'backup_{}/'.format(time.strftime('%Y-%m-%d_%H-%M')))
-        rsync.append(lastdir)
+        backup(args.config, True)
     else:
-        rsync.append(os.path.join(destination_dir, ''))
-    p = Popen(rsync, stdout=PIPE, stderr=PIPE)
-
-    if args.progress:
-        for line in iter(p.stdout.readline, b''):
-            print(line.decode(), end='')
-        print()
-    rsout, rserr = p.communicate()
-    if p.returncode not in [0, 23, 24]:
-        if type == 'incremental' and os.path.exists(lastdir):
-            rmtree(lastdir)
-        sys.exit(p.returncode)
-
-    post_script = config.get('backup', 'post-script', fallback=None)
-    if post_script:
-        p = Popen(shlex.split(post_script), stdout=PIPE)
-        if args.progress:
-            print('Running post-script: {}'.format(post_script))
-            for line in iter(p.stdout.readline, b''):
-                print(line.decode(), end='')
-            print()
-        p.communicate()
-
-    if type == 'incremental':
-        symlink = os.path.join(destination_dir, 'current')
-        if os.path.exists(symlink):
-            os.remove(symlink)
-        os.symlink(lastdir, symlink)
-        backups = [a for a in os.listdir(destination_dir) if a.startswith('backup')]
-        for oldestination_dir in sorted(backups)[:-config.getint('backup', 'retention', fallback=180)]:
-            if args.progress:
-                print('Removing old backup: {}'.format(oldestination_dir))
-            rmtree(os.path.join(destination_dir, oldestination_dir))
-
+        # Prepare output buffer and redirect stdout and stderr to it
+        buffer = io.StringIO()
+        orig_stdout, orig_stderr = sys.stdout, sys.stderr
+        sys.stdout = sys.stderr = buffer
+        try:
+            backup(args.config, False)
+        except:
+            # Restore stdout and stderr and replay output for cron to capture and send via e-mail
+            sys.stdout, sys.stderr = orig_stdout, orig_stderr
+            buffer.seek(0)
+            print(buffer.read())
+            raise
 
 if __name__ == '__main__':
-    parser = ArgumentParser(description='Disassembler\'s Backup Tool')
-    parser.add_argument('-c', '--config', required=True, help='specifies which config file will be used')
-    parser.add_argument('-p', '--progress', action='store_true', help='shows progress during transfer')
+    parser = argparse.ArgumentParser(description='Disassembler\'s rsync backup utility')
+    parser.add_argument('-p', '--progress', action='store_true', help='shows script output and progress during transfer')
+    parser.add_argument('config', help='specifies config file to be used')
     main(parser.parse_args())

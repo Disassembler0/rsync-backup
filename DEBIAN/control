@@ -1,9 +1,9 @@
 Package: backup
-Version: 1.3.0
+Version: 2.0.0
 Section: custom
 Priority: optional
 Architecture: all
 Depends: python3, rsync
 Installed-Size: 28
 Maintainer: Disassembler
-Description: Script for performing incremental or full rsync backups written in python
+Description: Python script for performing cumulative, full or incremental rsync backups

@@ -123,9 +123,6 @@
 + usr/share/roundcube
 + usr/share/roundcube/config
 + usr/share/roundcube/config/config.inc.php
-+ usr/share/roundcube/plugins
-+ usr/share/roundcube/plugins/password
-+ usr/share/roundcube/plugins/password/config.inc.php
 
 + var
 + var/lib
