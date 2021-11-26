@@ -110,16 +110,6 @@ def backup(conf_path, show_progress):
         raise subprocess.CalledProcessError(rsync_rc, rsync_readable)
     print()
 
-    # Run post-script
-    post_script = config.get('post-script', None)
-    if post_script:
-        print(f'Running post-script: {post_script}')
-        post_script_rc = passthru(post_script)
-        # Raise CalledProcessError if post-script didn't finish with returncode 0
-        if post_script_rc:
-            raise subprocess.CalledProcessError(post_script_rc, post_script)
-        print()
-
     # Create "current" symlink to the newest incremental destination dir
     # and remove the oldest backup(s) if the number of backups exceeded threshold
     if type == TYPE_INCREMENTAL:
@@ -134,6 +124,16 @@ def backup(conf_path, show_progress):
         for oldest_inc_dst_dir in backups[:-config.getint('retention', 180)]:
             print(f'Removing old backup: {oldest_inc_dst_dir}')
             shutil.rmtree(os.path.join(dst_dir, oldest_inc_dst_dir))
+
+    # Run post-script
+    post_script = config.get('post-script', None)
+    if post_script:
+        print(f'Running post-script: {post_script}')
+        post_script_rc = passthru(post_script)
+        # Raise CalledProcessError if post-script didn't finish with returncode 0
+        if post_script_rc:
+            raise subprocess.CalledProcessError(post_script_rc, post_script)
+        print()
 
 def main(args):
     # Print output directly if requested
