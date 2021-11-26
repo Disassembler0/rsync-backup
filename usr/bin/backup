@@ -34,9 +34,9 @@ def backup(conf_path, show_progress):
     config = config['backup']
 
     # Sanity-check backup type
-    type = config.get('type', None)
-    if type not in (TYPE_CUMULATIVE, TYPE_FULL, TYPE_INCREMENTAL):
-        raise ValueError(type)
+    backup_type = config.get('type', None)
+    if backup_type not in (TYPE_CUMULATIVE, TYPE_FULL, TYPE_INCREMENTAL):
+        raise ValueError(backup_type)
 
     # Run pre-script
     pre_script = config.get('pre-script', None)
@@ -58,7 +58,7 @@ def backup(conf_path, show_progress):
     if show_progress:
         rsync_cmd.append('--progress')
     # Delete files not existing in source for full and incremental backups
-    if type != TYPE_CUMULATIVE:
+    if backup_type != TYPE_CUMULATIVE:
         rsync_cmd.append('--delete')
     # Allow partial transfers if configured
     partial = config.getboolean('partial', False)
@@ -77,13 +77,13 @@ def backup(conf_path, show_progress):
     if include_from:
         rsync_cmd.append(f'--include-from={include_from}')
     # Set directory for hardlink sources for incremental backups
-    if type == TYPE_INCREMENTAL:
+    if backup_type == TYPE_INCREMENTAL:
         current_symlink = os.path.join(dst_dir, 'current')
         rsync_cmd.append(f'--link-dest={current_symlink}/')
     # Append source directory
     rsync_cmd.append(src_dir)
     # Append destination directory
-    if type == TYPE_INCREMENTAL:
+    if backup_type == TYPE_INCREMENTAL:
         # Create a timestamped subdirectory for incremental backup
         current_time = time.strftime('%Y-%m-%d_%H-%M')
         inc_dst_dir = os.path.join(dst_dir, f'backup_{current_time}/')
@@ -102,7 +102,7 @@ def backup(conf_path, show_progress):
     #   23 = Partial transfer due to error
     #   24 = Partial transfer due to vanished source files
     if rsync_rc not in (0, 23, 24):
-        if type == TYPE_INCREMENTAL and os.path.exists(inc_dst_dir):
+        if backup_type == TYPE_INCREMENTAL and os.path.exists(inc_dst_dir):
             try:
                 shutil.rmtree(inc_dst_dir)
             except FileNotFoundError:
@@ -112,7 +112,7 @@ def backup(conf_path, show_progress):
 
     # Create "current" symlink to the newest incremental destination dir
     # and remove the oldest backup(s) if the number of backups exceeded threshold
-    if type == TYPE_INCREMENTAL:
+    if backup_type == TYPE_INCREMENTAL:
         # Remove and recreate the symlink
         try:
             os.remove(current_symlink)
