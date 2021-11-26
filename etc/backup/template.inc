@@ -31,8 +31,13 @@
 
 + etc/fstab
 
++ etc/ftpadmin.conf
+
 + etc/hostname
 + etc/hosts
+
++ etc/iscsi
++ etc/iscsi/**
 
 + etc/libvirt
 + etc/libvirt/**
@@ -139,7 +144,7 @@
 + var/lib/rspamd
 + var/lib/rspamd/**
 
-+ var/lib/samba/
++ var/lib/samba
 + var/lib/samba/**
 
 - *
