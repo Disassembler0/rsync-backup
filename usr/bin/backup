@@ -86,7 +86,8 @@ def backup(conf_path, show_progress):
     if backup_type == TYPE_INCREMENTAL:
         # Create a timestamped subdirectory for incremental backup
         current_time = time.strftime('%Y-%m-%d_%H-%M')
-        inc_dst_dir = os.path.join(dst_dir, f'backup_{current_time}/')
+        backup_dir = f'backup_{current_time}/'
+        inc_dst_dir = os.path.join(dst_dir, backup_dir)
         rsync_cmd.append(inc_dst_dir)
     else:
         rsync_cmd.append(os.path.join(dst_dir, ''))
@@ -118,7 +119,7 @@ def backup(conf_path, show_progress):
             os.remove(current_symlink)
         except FileNotFoundError:
             pass
-        os.symlink(inc_dst_dir, current_symlink)
+        os.symlink(backup_dir, current_symlink)
         # Remove the oldest backup(s) if the number of backups exceeded retention threshold
         backups = sorted([a for a in os.listdir(dst_dir) if a.startswith('backup')])
         for oldest_inc_dst_dir in backups[:-config.getint('retention', 180)]:
