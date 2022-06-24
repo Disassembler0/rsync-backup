@@ -132,6 +132,10 @@
 + var
 + var/lib
 
++ var/lib/libvirt
++ var/lib/libvirt/images
++ var/lib/libvirt/images/*.qcow2
+
 + var/lib/lxc
 + var/lib/lxc/**
 
