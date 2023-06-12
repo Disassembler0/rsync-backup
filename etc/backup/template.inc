@@ -1,154 +1,71 @@
 + etc
-
-+ etc/acme-sh
-+ etc/acme-sh/**
-
-+ etc/apache2
-+ etc/apache2/**
-
-+ etc/backup
-+ etc/backup/**
-
-+ etc/bind
-+ etc/bind/**
-
-+ etc/cron.d
-+ etc/cron.d/**
-
++ etc/acme-sh/***
++ etc/apache2/***
++ etc/apcupsd/***
++ etc/backup/***
++ etc/bind/***
++ etc/cron.d/***
 + etc/dbbackup.conf
-
-+ etc/default
-+ etc/default/**
-
-+ etc/dovecot
-+ etc/dovecot/**
-
-+ etc/fail2ban
-+ etc/fail2ban/**
-
-+ etc/firewall
-+ etc/firewall/**
-
++ etc/default/***
++ etc/dovecot/***
++ etc/fail2ban/***
++ etc/firewall/***
 + etc/fstab
-
 + etc/ftpadmin.conf
-
 + etc/hostname
 + etc/hosts
-
-+ etc/iscsi
-+ etc/iscsi/**
-
-+ etc/libvirt
-+ etc/libvirt/**
-
-+ etc/logrotate.d
-+ etc/logrotate.d/**
-
++ etc/iscsi/***
++ etc/libvirt/***
++ etc/logrotate.d/***
 + etc/mailadmin.conf
-
 + etc/mailname
-
 + etc/minidlna.conf
-
-+ etc/mysql
-+ etc/mysql/**
-
-+ etc/netplan
-+ etc/netplan/**
-
-+ etc/nullmailer
-+ etc/nullmailer/**
-
-+ etc/php
-+ etc/php/**
-
-+ etc/postfix
-+ etc/postfix/**
-
-+ etc/postgresql
-+ etc/postgresql/**
-
-+ etc/pure-ftpd
-+ etc/pure-ftpd/**
-
-+ etc/redis
-+ etc/redis/**
-
++ etc/mysql/***
++ etc/netplan/***
++ etc/nullmailer/***
++ etc/php/***
++ etc/postfix/***
++ etc/postgresql/***
++ etc/pure-ftpd/***
++ etc/redis/***
 + etc/report.conf
-
 + etc/resolv.conf
-
-+ etc/rspamd
-+ etc/rspamd/**
-
++ etc/rspamd/***
 + etc/rsyslog.conf
-+ etc/rsyslog.d
-+ etc/rsyslog.d/**
++ etc/rsyslog.d/***
++ etc/samba/***
++ etc/sysctl.d/***
++ etc/systemd/***
++ etc/zabbix/***
 
-+ etc/samba
-+ etc/samba/**
++ opt/***
 
-+ etc/sysctl.d
-+ etc/sysctl.d/**
-
-+ etc/systemd/
-+ etc/systemd/**
-
-+ etc/zabbix
-+ etc/zabbix/**
-
-+ opt
-+ opt/**
-
-+ root
-+ root/**
++ root/***
 
 + srv
-
-+ srv/cloud
-+ srv/cloud/**
-
-+ srv/mail
-+ srv/mail/**
-
-+ srv/pgbackup
-+ srv/pgbackup/**
-
-+ srv/share
-+ srv/share/**
++ srv/cloud/***
++ srv/mail/***
++ srv/pgbackup/***
++ srv/share/***
 
 + usr
 + usr/share
-
 + usr/share/nextcloud
 + usr/share/nextcloud/config
 + usr/share/nextcloud/config/config.php
-
 + usr/share/roundcube
 + usr/share/roundcube/config
 + usr/share/roundcube/config/config.inc.php
 
 + var
 + var/lib
-
 + var/lib/libvirt
 + var/lib/libvirt/images
 + var/lib/libvirt/images/*.qcow2
-
-+ var/lib/lxc
-+ var/lib/lxc/**
-
-+ var/lib/lxd
-+ var/lib/lxd/**
-
-+ var/lib/redis
-+ var/lib/redis/**
-
-+ var/lib/rspamd
-+ var/lib/rspamd/**
-
-+ var/lib/samba
-+ var/lib/samba/**
++ var/lib/lxc/***
++ var/lib/lxd/***
++ var/lib/redis/***
++ var/lib/rspamd/***
++ var/lib/samba/***
 
 - *
