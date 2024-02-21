@@ -86,20 +86,15 @@ def backup(conf_path, run_method):
     # Delete files not existing in source for full and incremental backups
     if backup_type != TYPE_CUMULATIVE:
         rsync_cmd.append("--delete-during")
-    # Allow partial transfers if configured
-    if config.getboolean("partial", False):
-        rsync_cmd.append("--partial")
-    # Allow compression if configured
-    if config.getboolean("compress", False):
-        rsync_cmd.append("--compress")
-    # Allow sparse file handling
-    if config.getboolean("sparse", False):
-        rsync_cmd.append("--sparse")
-    # Use remote shell if configured
+    # Include extra rsync command arguments
+    extra_args = config.get("extra-args", None)
+    if extra_args:
+        rsync_cmd.extend(extra_args.split())
+    # Use remote shell
     remote_shell = config.get("remote-shell", None)
     if remote_shell:
         rsync_cmd.extend(("--rsh", remote_shell))
-    # Load list if files to include in the backup if configured
+    # Load list if files to include in the backup
     include_from = config.get("include-from", None)
     if include_from:
         rsync_cmd.extend(("--include-from", include_from))
