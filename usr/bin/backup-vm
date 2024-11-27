@@ -1,0 +1,140 @@
+#!/usr/bin/python3
+
+from argparse import ArgumentParser
+from pathlib import Path
+from shutil import copystat
+from subprocess import run, DEVNULL, PIPE
+from sys import exit
+from tempfile import NamedTemporaryFile
+from time import sleep
+
+
+def get_domain_disks(domain):
+    """
+    Returns a {device:path} dictionary of disks for specified domain.
+    """
+    disks = {}
+    domblklist = run(
+        ["virsh", "domblklist", domain, "--details"], text=True, stdout=PIPE, check=True
+    )
+    for line in domblklist.stdout.splitlines():
+        if " disk " not in line:
+            continue
+        line = line.split()
+        disks[line[2]] = Path(line[3])
+    return disks
+
+
+def get_domain_state(domain):
+    """
+    Returns a domain running state.
+    """
+    dominfo = run(["virsh", "dominfo", domain], text=True, stdout=PIPE, check=True)
+    for line in dominfo.stdout.splitlines():
+        if line.startswith("State:"):
+            return line.split(None, 1)[1]
+
+
+def create_backup_xml(target, disks):
+    """
+    Returns an XML string with the backup job definition.
+    """
+    disk_elements = []
+    for disk, path in disks.items():
+        target_path = target / path.name
+        disk_elements.append(
+            f"""
+    <disk name='{disk}' type='file'>
+      <target file='{target_path}'/>
+    </disk>"""
+        )
+
+    return f"""<domainbackup>
+  <disks>{''.join(disk_elements)}
+  </disks>
+</domainbackup>
+"""
+
+
+def run_backup(domain, target, disks):
+    """
+    Runs `virsh backup-begin` with the requested parameters.
+    """
+    with NamedTemporaryFile("w", encoding="utf-8", prefix="backup-vm-") as xml_file:
+        xml_file.write(create_backup_xml(target, disks))
+        xml_file.flush()
+        run(
+            ["virsh", "backup-begin", "--backupxml", xml_file.name, domain],
+            stdout=DEVNULL,
+            check=True,
+        )
+
+    completed = False
+    while not completed:
+        sleep(1)
+        domjobinfo = run(
+            ["virsh", "domjobinfo", domain], text=True, stdout=PIPE, check=True
+        )
+        if domjobinfo.stdout.splitlines()[0].rsplit(None, 1) == ["Job type:", "None"]:
+            completed = True
+
+
+def run_convert(target, disks):
+    """
+    Runs `qemu-img convert` on the requested disks.
+    This is preferred to plain file copy as it helps to sparsify the images,
+    provided the QEMU guest agent tools are installed on the guest and qemu-ga channel exists.
+    """
+    for disk, path in disks.items():
+        target_path = target / path.name
+        run(
+            ["qemu-img", "convert", "-O", "qcow2", str(path), str(target_path)],
+            stdout=DEVNULL,
+            check=True,
+        )
+        # Transplant the attributes from the original file for subsequent rsync to think
+        # there was no change in case the VM stays off between the backups
+        copystat(path, target_path)
+
+
+def parse_args():
+    """
+    Parses command line arguments.
+    """
+    parser = ArgumentParser(description="Disassembler's QEMU VM backup utility")
+    parser.add_argument("domain", help="Name of the QEMU domain (virtual machine)")
+    parser.add_argument("target", type=Path, help="Target directory for the QCOW2 image backup")
+    parser.add_argument("disks", nargs="*", help="Disks (device names) to include in the backup")
+    return parser.parse_args()
+
+
+def main():
+    """
+    Main entrypoint for the tool.
+    """
+    args = parse_args()
+
+    state = get_domain_state(args.domain)
+    if state not in ("running", "shut off"):
+        exit(f"ERROR: Domain '{args.domain}' is in unexpected state '{state}'.")
+
+    disks = get_domain_disks(args.domain)
+    if args.disks:
+        nonexistent_disks = set(args.disks) - set(disks)
+        if nonexistent_disks:
+            exit(
+                f"ERROR: Domain '{args.domain}' doesn't have "
+                f"the following disks: {nonexistent_disks}."
+            )
+        for disk in set(disks):
+            if disk not in args.disks:
+                del disks[disk]
+
+    if state == "running":
+        run_backup(args.domain, args.target, disks)
+    else:
+        run_convert(args.target, disks)
+
+
+if __name__ == "__main__":
+    main()
