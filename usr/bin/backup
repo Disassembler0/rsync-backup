@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 
-import argparse
-import configparser
-import io
 import os
 import shlex
 import sys
-import time
-import shutil
-import subprocess
+from argparse import ArgumentParser
+from configparser import ConfigParser
+from io import StringIO
+from shutil import rmtree
+from subprocess import run, CalledProcessError, Popen, PIPE, STDOUT
+from time import strftime
 
 
 TYPE_CUMULATIVE = "cumulative"
@@ -20,12 +20,8 @@ def run_buffered_command(command):
     """
     Runs command and streams stdout/stderr to output buffer as it is generated
     """
-    with subprocess.Popen(
-        command,
-        shell=isinstance(command, str),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True,
+    with Popen(
+        command, shell=isinstance(command, str), stdout=PIPE, stderr=STDOUT, text=True
     ) as process:
         # Read and print stdout to the buffer line by line
         for line in process.stdout:
@@ -33,14 +29,14 @@ def run_buffered_command(command):
         # Check the return code, raise CalledProcessError if it is non-zero
         return_code = process.wait()
         if return_code:
-            raise subprocess.CalledProcessError(return_code, command)
+            raise CalledProcessError(return_code, command)
 
 
 def run_direct_command(command):
     """
     Runs command directly to preserve all ANSI sequences
     """
-    subprocess.run(command, shell=isinstance(command, str), check=True)
+    run(command, shell=isinstance(command, str), check=True)
 
 
 def run_script(config, phase, run_method):
@@ -60,7 +56,7 @@ def backup(conf_path, run_method):
     Parses the config file, creates rsync command and runs it along with the pre-/post-scripts
     """
     # Read the config. Raises FileNotFoundError if the config file doesn't exist
-    config = configparser.ConfigParser()
+    config = ConfigParser()
     with open(conf_path, encoding="utf-8") as f:
         config_data = f"[backup]\n{f.read()}"
     config.read_string(config_data)
@@ -86,10 +82,6 @@ def backup(conf_path, run_method):
     # Delete files not existing in source for full and incremental backups
     if backup_type != TYPE_CUMULATIVE:
         rsync_cmd.append("--delete-during")
-    # Include extra rsync command arguments
-    extra_args = config.get("extra-args", None)
-    if extra_args:
-        rsync_cmd.extend(extra_args.split())
     # Use remote shell
     remote_shell = config.get("remote-shell", None)
     if remote_shell:
@@ -102,32 +94,34 @@ def backup(conf_path, run_method):
     if backup_type == TYPE_INCREMENTAL:
         current_symlink = os.path.join(dst_dir, "current")
         rsync_cmd.extend(("--link-dest", f"{current_symlink}/"))
+    # Include extra rsync command arguments
+    extra_args = config.get("extra-args", None)
+    if extra_args:
+        rsync_cmd.extend(shlex.split(extra_args))
     # Append source directory
     rsync_cmd.append(src_dir)
     # Append destination directory
     if backup_type == TYPE_INCREMENTAL:
         # Create a timestamped subdirectory for incremental backup
-        current_time = time.strftime("%Y-%m-%d_%H-%M")
+        current_time = strftime("%Y-%m-%d_%H-%M")
         backup_dir = f"backup_{current_time}"
         inc_dst_dir = os.path.join(dst_dir, backup_dir, "")
         rsync_cmd.append(inc_dst_dir)
     else:
         rsync_cmd.append(os.path.join(dst_dir, ""))
 
-    # Make the rsync command readable for print (same as shlex.join() in python 3.8)
-    rsync_readable = " ".join(shlex.quote(token) for token in rsync_cmd)
-    print(f"Running backup: {rsync_readable}")
+    print(f"Running backup: {shlex.join(rsync_cmd)}")
     # Run the rsync command
     try:
         run_method(rsync_cmd)
-    except subprocess.CalledProcessError as ex:
+    except CalledProcessError as ex:
         # Remove incremental destination dir and re-raise CalledProcessError
         # if rsync didn't finish with allowed return codes
         #   23 = Partial transfer due to error
         #   24 = Partial transfer due to vanished source files
         if ex.returncode not in (23, 24):
             if backup_type == TYPE_INCREMENTAL and os.path.exists(inc_dst_dir):
-                shutil.rmtree(inc_dst_dir, ignore_errors=True)
+                rmtree(inc_dst_dir, ignore_errors=True)
             raise
     print()
 
@@ -144,7 +138,7 @@ def backup(conf_path, run_method):
         backups = sorted([entry for entry in os.listdir(dst_dir) if entry.startswith("backup")])
         for oldest_inc_dst_dir in backups[: -config.getint("retention", 180)]:
             print(f"Removing old backup: {oldest_inc_dst_dir}")
-            shutil.rmtree(os.path.join(dst_dir, oldest_inc_dst_dir))
+            rmtree(os.path.join(dst_dir, oldest_inc_dst_dir))
 
     # Run post-script
     run_script(config, "post-script", run_method)
@@ -154,7 +148,7 @@ def main(args=None):
     """
     Main entrypoint
     """
-    parser = argparse.ArgumentParser(description="Disassembler's rsync backup utility")
+    parser = ArgumentParser(description="Disassembler's rsync backup utility")
     parser.add_argument(
         "-p",
         "--progress",
@@ -169,7 +163,7 @@ def main(args=None):
     else:
         run_method = run_buffered_command
         # Capture stdout and stderr into output buffer
-        buffer = io.StringIO()
+        buffer = StringIO()
         sys.stdout = sys.stderr = buffer
 
     try:
